@@ -1,0 +1,12 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom POS Tweaks */
+input::placeholder {
+  color: #94a3b8;
+}
+
+body {
+  @apply antialiased text-slate-800;
+}

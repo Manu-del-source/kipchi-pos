@@ -1,0 +1,117 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  CASHIER
+}
+
+model Branch {
+  id        String    @id @default(uuid())
+  name      String
+  location  String?
+  code      String    @unique
+  users     User[]
+  products  Product[]
+  sales     Sale[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model User {
+  id           String   @id @default(uuid())
+  username     String   @unique
+  passwordHash String
+  name         String
+  role         Role     @default(CASHIER)
+  branchId     String
+  branch       Branch   @relation(fields: [branchId], references: [id])
+  sales        Sale[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Product {
+  id           String     @id @default(uuid())
+  name         String
+  barcode      String     @unique
+  sku          String?
+  category     String?
+  price        Decimal    @db.Decimal(10, 2)
+  costPrice    Decimal    @db.Decimal(10, 2)
+  stockLevel   Int        @default(0)
+  lowStockThreshold Int   @default(10)
+  branchId     String
+  branch       Branch     @relation(fields: [branchId], references: [id])
+  saleItems    SaleItem[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([barcode])
+}
+
+model Customer {
+  id            String   @id @default(uuid())
+  name          String
+  phone         String   @unique
+  loyaltyPoints Int      @default(0)
+  sales         Sale[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Sale {
+  id              String     @id @default(uuid())
+  saleNumber      String     @unique
+  total           Decimal    @db.Decimal(10, 2)
+  tax             Decimal    @db.Decimal(10, 2)
+  discount        Decimal    @db.Decimal(10, 2) @default(0)
+  paymentStatus   String     @default("PENDING") // PENDING, PAID, CANCELLED
+  paymentMethod   String?    // CASH, MPESA, POINTS
+  cashierId       String
+  cashier         User       @relation(fields: [cashierId], references: [id])
+  customerId      String?
+  customer        Customer?  @relation(fields: [customerId], references: [id])
+  branchId        String
+  branch          Branch     @relation(fields: [branchId], references: [id])
+  items           SaleItem[]
+  mpesaDetails    MpesaTransaction?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+}
+
+model SaleItem {
+  id        String  @id @default(uuid())
+  saleId    String
+  sale      Sale    @relation(fields: [saleId], references: [id])
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int
+  unitPrice Decimal @db.Decimal(10, 2)
+  subtotal  Decimal @db.Decimal(10, 2)
+}
+
+model MpesaTransaction {
+  id                String   @id @default(uuid())
+  saleId            String   @unique
+  sale              Sale     @relation(fields: [saleId], references: [id])
+  checkoutRequestId String   @unique
+  merchantRequestId String
+  resultCode        Int?
+  resultDesc        String?
+  amount            Decimal? @db.Decimal(10, 2)
+  mpesaReceipt      String?
+  phoneNumber       String?
+  status            String   @default("PENDING") // PENDING, SUCCESS, FAILED
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
