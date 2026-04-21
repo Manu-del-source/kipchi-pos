@@ -1,6 +1,6 @@
 const axios = require('axios');
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const db = require('../config/db');
+const { v4: uuidv4 } = require('uuid');
 
 class MpesaService {
   async getAccessToken() {
@@ -17,17 +17,12 @@ class MpesaService {
 
   async stkPush(phoneNumber, amount, saleId) {
     // 1. Check for existing pending transaction for this sale to prevent double-billing
-    const existingTransaction = await prisma.mpesaTransaction.findFirst({
-      where: {
-        saleId,
-        status: 'PENDING',
-        createdAt: {
-          gt: new Date(Date.now() - 5 * 60 * 1000) // Within last 5 minutes
-        }
-      }
-    });
+    const existing = await db.query(
+      'SELECT id FROM "MpesaTransaction" WHERE "saleId" = $1 AND status = \'PENDING\' AND "createdAt" > NOW() - INTERVAL \'5 minutes\'',
+      [saleId]
+    );
 
-    if (existingTransaction) {
+    if (existing.rows.length > 0) {
       throw new Error('A payment request for this sale is already pending on the user\'s phone.');
     }
 
@@ -58,16 +53,11 @@ class MpesaService {
     );
 
     // Record the transaction attempt
-    await prisma.mpesaTransaction.create({
-      data: {
-        saleId,
-        checkoutRequestId: response.data.CheckoutRequestID,
-        merchantRequestId: response.data.MerchantRequestID,
-        phoneNumber,
-        amount,
-        status: 'PENDING',
-      },
-    });
+    const id = uuidv4();
+    await db.query(
+      'INSERT INTO "MpesaTransaction" (id, "saleId", "checkoutRequestId", "merchantRequestId", "phoneNumber", amount, status, "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, \'PENDING\', NOW())',
+      [id, saleId, response.data.CheckoutRequestID, response.data.MerchantRequestID, phoneNumber, amount]
+    );
 
     return response.data;
   }

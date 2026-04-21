@@ -4,10 +4,9 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
-const { PrismaClient } = require('@prisma/client');
-
-const prisma = new PrismaClient();
+const db = require('./src/config/db');
 const app = express();
+const PORT = process.env.PORT || 5000;
 
 // Rate limiting
 const generalLimiter = rateLimit({
@@ -65,6 +64,6 @@ app.listen(PORT, () => {
 });
 
 process.on('SIGINT', async () => {
-  await prisma.$disconnect();
+  await db.pool.end();
   process.exit(0);
 });

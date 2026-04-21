@@ -1,6 +1,5 @@
-const { PrismaClient } = require('@prisma/client');
+const db = require('../config/db');
 const mpesaService = require('../services/mpesa.service');
-const prisma = new PrismaClient();
 
 exports.initiateStkPush = async (req, res) => {
   try {
@@ -13,7 +12,9 @@ exports.initiateStkPush = async (req, res) => {
 };
 
 exports.mpesaCallback = async (req, res) => {
+  const client = await db.pool.connect();
   try {
+    await client.query('BEGIN');
     const { Body } = req.body;
     if (!Body || !Body.stkCallback) {
       console.error('❌ Invalid M-Pesa Callback Body:', req.body);
@@ -36,58 +37,75 @@ exports.mpesaCallback = async (req, res) => {
       mpesaReceipt = receiptItem ? receiptItem.Value : null;
     }
 
-    const transaction = await prisma.mpesaTransaction.update({
-      where: { checkoutRequestId },
-      data: { 
-        status, 
-        resultCode, 
-        resultDesc, 
-        mpesaReceipt,
-        updatedAt: new Date()
-      },
-    });
+    const result = await client.query(
+      'UPDATE "MpesaTransaction" SET status = $1, "resultCode" = $2, "resultDesc" = $3, "mpesaReceipt" = $4, "updatedAt" = NOW() WHERE "checkoutRequestId" = $5 RETURNING "saleId"',
+      [status, resultCode, resultDesc, mpesaReceipt, checkoutRequestId]
+    );
 
-    if (status === 'SUCCESS') {
-      await prisma.sale.update({
-        where: { id: transaction.saleId },
-        data: { paymentStatus: 'PAID' },
-      });
-      console.log(`✅ Sale ${transaction.saleId} marked as PAID`);
+    if (result.rows.length > 0 && status === 'SUCCESS') {
+      const saleId = result.rows[0].saleId;
+      await client.query(
+        'UPDATE "Sale" SET "paymentStatus" = $1, "updatedAt" = NOW() WHERE id = $2',
+        ['PAID', saleId]
+      );
+      console.log(`✅ Sale ${saleId} marked as PAID`);
     }
 
-    // Safaricom expects this response
+    await client.query('COMMIT');
     res.status(200).json({ ResultCode: 0, ResultDesc: "Success" });
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('🔥 M-Pesa Callback Error:', error);
     res.status(200).json({ ResultCode: 1, ResultDesc: "Internal Error" });
+  } finally {
+    client.release();
   }
 };
 
 
 exports.checkPaymentStatus = async (req, res) => {
-  const { checkoutRequestId } = req.params;
-
+  const client = await db.pool.connect();
   try {
+    const { checkoutRequestId } = req.params;
     const status = await mpesaService.checkStkStatus(checkoutRequestId);
     
-    // ResultCode 0 means success
     if (status.ResultCode === '0') {
-      const transaction = await prisma.mpesaTransaction.findUnique({ where: { checkoutRequestId } });
-      if (transaction && transaction.status !== 'SUCCESS') {
-        await prisma.mpesaTransaction.update({
-          where: { checkoutRequestId },
-          data: { status: 'SUCCESS' },
-        });
-        await prisma.sale.update({
-          where: { id: transaction.saleId },
-          data: { paymentStatus: 'PAID' },
-        });
+      await client.query('BEGIN');
+      const result = await client.query(
+        'SELECT "saleId", status FROM "MpesaTransaction" WHERE "checkoutRequestId" = $1',
+        [checkoutRequestId]
+      );
+      
+      if (result.rows.length > 0 && result.rows[0].status !== 'SUCCESS') {
+        const saleId = result.rows[0].saleId;
+        await client.query(
+          'UPDATE "MpesaTransaction" SET status = $1, "updatedAt" = NOW() WHERE "checkoutRequestId" = $2',
+          ['SUCCESS', checkoutRequestId]
+        );
+        await client.query(
+          'UPDATE "Sale" SET "paymentStatus" = $1, "updatedAt" = NOW() WHERE id = $2',
+          ['PAID', saleId]
+        );
+
+        // Notify Real-time Service
+        try {
+          await axios.post('http://localhost:5001/api/realtime/payment-notification', {
+            saleId,
+            checkoutRequestId,
+            status: 'SUCCESS'
+          });
+        } catch (err) {
+          console.error('⚠️ Failed to notify real-time service:', err.message);
+        }
       }
+      await client.query('COMMIT');
     }
 
     res.json(status);
   } catch (error) {
+    await client.query('ROLLBACK');
     res.status(500).json({ message: error.message });
+  } finally {
+    client.release();
   }
 };
-

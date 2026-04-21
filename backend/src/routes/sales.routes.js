@@ -21,7 +21,7 @@ router.post('/',
   validate,
   salesController.createSale
 );
-router.get('/', auth, salesController.getSales);
+router.get('/', auth, salesController.getSalesHistory);
 router.get('/:id', auth, salesController.getSaleById);
 
 module.exports = router;

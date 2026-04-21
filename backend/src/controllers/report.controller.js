@@ -1,77 +1,80 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const db = require('../config/db');
 
 exports.getDashboardStats = async (req, res) => {
-  const { branchId } = req.user;
-  const { startDate, endDate } = req.query;
-
-  const dateFilter = {};
-  if (startDate && endDate) {
-    dateFilter.createdAt = {
-      gte: new Date(startDate),
-      lte: new Date(endDate),
-    };
-  }
-
   try {
-    // 1. Total Sales and Count
-    const salesSummary = await prisma.sale.aggregate({
-      where: { branchId, ...dateFilter },
-      _sum: { total: true },
-      _count: { id: true },
-    });
+    const { branchId } = req.user;
 
-    // 2. Popular Items
-    const popularItems = await prisma.saleItem.groupBy({
-      by: ['productId'],
-      where: { sale: { branchId, ...dateFilter } },
-      _sum: { quantity: true },
-      orderBy: { _sum: { quantity: 'desc' } },
-      take: 5,
-    });
-
-    // Get product names for popular items
-    const popularItemsWithNames = await Promise.all(
-      popularItems.map(async (item) => {
-        const product = await prisma.product.findUnique({
-          where: { id: item.productId },
-          select: { name: true },
-        });
-        return {
-          name: product?.name || 'Unknown',
-          quantity: item._sum.quantity,
-        };
-      })
+    // 1. Total Revenue (Today)
+    const revenueToday = await db.query(
+      'SELECT SUM(total) as revenue FROM "Sale" WHERE "branchId" = $1 AND "createdAt" >= CURRENT_DATE',
+      [branchId]
     );
 
-    // 3. Sales Trend (Daily)
-    const salesTrend = await prisma.sale.groupBy({
-      by: ['createdAt'],
-      where: { branchId, ...dateFilter },
-      _sum: { total: true },
-      orderBy: { createdAt: 'asc' },
-    });
+    // 2. Sales Count (Today)
+    const salesToday = await db.query(
+      'SELECT COUNT(*) as count FROM "Sale" WHERE "branchId" = $1 AND "createdAt" >= CURRENT_DATE',
+      [branchId]
+    );
 
-    // Grouping by date string manually for simplicity in this example
-    const trendMap = {};
-    salesTrend.forEach(s => {
-      const date = s.createdAt.toISOString().split('T')[0];
-      trendMap[date] = (trendMap[date] || 0) + Number(s._sum.total);
-    });
-    
-    const formattedTrend = Object.keys(trendMap).map(date => ({
-      date,
-      total: trendMap[date]
-    }));
+    // 3. Low Stock Count
+    const lowStockCount = await db.query(
+      'SELECT COUNT(*) as count FROM "Product" WHERE "branchId" = $1 AND "stockLevel" <= "lowStockThreshold"',
+      [branchId]
+    );
 
     res.json({
-      summary: {
-        totalRevenue: salesSummary._sum.total || 0,
-        totalTransactions: salesSummary._count.id || 0,
-      },
-      popularItems: popularItemsWithNames,
-      salesTrend: formattedTrend,
+      revenueToday: revenueToday.rows[0].revenue || 0,
+      salesToday: salesToday.rows[0].count,
+      lowStockCount: lowStockCount.rows[0].count
     });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.getSalesReport = async (req, res) => {
+  try {
+    const { branchId } = req.user;
+    const { startDate, endDate } = req.query;
+
+    const result = await db.query(
+      'SELECT COUNT(*) as "totalSales", SUM(total) as "totalRevenue", SUM(tax) as "totalTax" FROM "Sale" WHERE "branchId" = $1 AND "createdAt" BETWEEN $2 AND $3',
+      [branchId, startDate || '1970-01-01', endDate || '9999-12-31']
+    );
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.getTopProducts = async (req, res) => {
+  try {
+    const { branchId } = req.user;
+    const result = await db.query(
+      `SELECT p.name, SUM(si.quantity) as "totalSold", SUM(si.subtotal) as revenue 
+       FROM "SaleItem" si 
+       JOIN "Product" p ON si."productId" = p.id 
+       JOIN "Sale" s ON si."saleId" = s.id 
+       WHERE s."branchId" = $1 
+       GROUP BY p.id, p.name 
+       ORDER BY "totalSold" DESC LIMIT 10`,
+      [branchId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.getInventoryAlerts = async (req, res) => {
+  try {
+    const { branchId } = req.user;
+    const result = await db.query(
+      'SELECT * FROM "Product" WHERE "branchId" = $1 AND "stockLevel" <= "lowStockThreshold"',
+      [branchId]
+    );
+    res.json(result.rows);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

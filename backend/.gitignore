@@ -1,0 +1,9 @@
+node_modules/
+.env
+*.log
+.DS_Store
+# Prisma engines
+prisma/*.node
+prisma/*.so.node
+# Specific weird Prisma engine binary found earlier
+"prisma/\0016\032\017@Ha2\001@8"

@@ -1,22 +1,24 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const db = require('../config/db');
+const { v4: uuidv4 } = require('uuid');
 
-exports.createBranch = async (req, res) => {
+exports.getBranches = async (req, res) => {
   try {
-    const { name, location, code } = req.body;
-    const branch = await prisma.branch.create({
-      data: { name, location, code }
-    });
-    res.status(201).json(branch);
+    const result = await db.query('SELECT * FROM "Branch" ORDER BY name ASC');
+    res.json(result.rows);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-exports.getBranches = async (req, res) => {
+exports.createBranch = async (req, res) => {
   try {
-    const branches = await prisma.branch.findMany();
-    res.json(branches);
+    const { name, location, code } = req.body;
+    const id = uuidv4();
+    const result = await db.query(
+      'INSERT INTO "Branch" (id, name, location, code, "updatedAt") VALUES ($1, $2, $3, $4, NOW()) RETURNING *',
+      [id, name, location, code]
+    );
+    res.status(201).json(result.rows[0]);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
