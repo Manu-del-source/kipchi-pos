@@ -1,34 +1,23 @@
 import axios from 'axios';
 
+// Detect the current host's IP and use port 5000 for the FastAPI backend
+const getBaseURL = () => {
+  const { hostname } = window.location;
+  // If we are on localhost, backend is at localhost:5000
+  // If we are on a mobile device, backend is at [mobile-ip]:5000
+  return `http://${hostname}:5000/api`;
+};
+
 const api = axios.create({
-  baseURL: '/api/v1',
+  baseURL: getBaseURL(),
 });
 
-// Add a request interceptor to add the auth token to every request
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
-);
-
-// Add a response interceptor to handle 401 errors (expired tokens)
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response && error.response.status === 401) {
-      // Redirect to login or clear local storage
-      localStorage.removeItem('token');
-      window.location.href = '/login';
-    }
-    return Promise.reject(error);
-  }
-);
+  return config;
+});
 
 export default api;

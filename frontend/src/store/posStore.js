@@ -1,62 +1,41 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 
-export const usePOSStore = create(
-  persist(
-    (set, get) => ({
-      cart: [],
-      customer: null,
-      discount: 0,
-      
-      addToCart: (product) => {
-        const cart = get().cart;
-        const index = cart.findIndex(item => item.id === product.id);
-        
-        if (index > -1) {
-          const newCart = [...cart];
-          newCart[index].quantity += 1;
-          newCart[index].subtotal = (parseFloat(newCart[index].unit_price) * newCart[index].quantity).toFixed(2);
-          set({ cart: newCart });
-        } else {
-          set({ cart: [...cart, {
-            id: product.id,
-            product: product.id,
-            name: product.name,
-            unit_price: product.price,
-            quantity: 1,
-            subtotal: parseFloat(product.price).toFixed(2)
-          }] });
+export const usePOSStore = create((set, get) => ({
+  cart: [],
+  addToCart: (product) => {
+    const { cart } = get();
+    const existing = cart.find(item => item.id === product.id);
+    if (existing) {
+      set({
+        cart: cart.map(item =>
+          item.id === product.id
+            ? { ...item, quantity: item.quantity + 1, subtotal: (item.quantity + 1) * item.price }
+            : item
+        )
+      });
+    } else {
+      set({
+        cart: [...cart, { ...product, quantity: 1, subtotal: product.price }]
+      });
+    }
+  },
+  updateQuantity: (id, delta) => {
+    const { cart } = get();
+    set({
+      cart: cart.map(item => {
+        if (item.id === id) {
+          const newQty = Math.max(1, item.quantity + delta);
+          return { ...item, quantity: newQty, subtotal: newQty * item.price };
         }
-      },
-
-      removeFromCart: (productId) => {
-        set({ cart: get().cart.filter(item => item.id !== productId) });
-      },
-
-      updateQuantity: (productId, delta) => {
-        const newCart = get().cart.map(item => {
-          if (item.id === productId) {
-            const newQty = Math.max(1, item.quantity + delta);
-            return {
-              ...item,
-              quantity: newQty,
-              subtotal: (parseFloat(item.unit_price) * newQty).toFixed(2)
-            };
-          }
-          return item;
-        });
-        set({ cart: newCart });
-      },
-
-      setCustomer: (customer) => set({ customer }),
-      setDiscount: (discount) => set({ discount }),
-      clearCart: () => set({ cart: [], customer: null, discount: 0 }),
-      
-      getTotal: () => {
-        const subtotal = get().cart.reduce((sum, item) => sum + parseFloat(item.subtotal), 0);
-        return (subtotal - get().discount).toFixed(2);
-      }
-    }),
-    { name: 'kipchi-cart-storage' }
-  )
-);
+        return item;
+      })
+    });
+  },
+  removeFromCart: (id) => {
+    set({ cart: get().cart.filter(item => item.id !== id) });
+  },
+  getTotal: () => {
+    return get().cart.reduce((sum, item) => sum + item.subtotal, 0);
+  },
+  clearCart: () => set({ cart: [] })
+}));

@@ -32,20 +32,21 @@ function App() {
       <Toaster position="top-right" />
       <div className="min-h-screen flex flex-col">
         {token && (
-          <nav className="bg-blue-600 text-white p-4 flex justify-between items-center shadow-lg">
-            <div className="flex items-center space-x-2">
-              <span className="text-2xl">🛒</span>
-              <div className="text-xl font-bold">Kipchi-POS 🇰🇪</div>
+          <nav className="bg-slate-900 text-white p-4 flex justify-between items-center border-b border-slate-800 shadow-xl">
+            <div className="flex items-center space-x-3">
+              <div className="bg-blue-600 p-2 rounded-lg">
+                <span className="text-xl">🛠️</span>
+              </div>
+              <div className="text-xl font-black tracking-tighter uppercase">ROHI <span className="text-blue-500">Hardware & Moto</span> POS</div>
             </div>
-            <div className="flex items-center space-x-4">
-              <Link to="/" className="hover:bg-blue-700 px-3 py-2 rounded transition">POS</Link>
-              <Link to="/inventory" className="hover:bg-blue-700 px-3 py-2 rounded transition">Inventory</Link>
-              <Link to="/customers" className="hover:bg-blue-700 px-3 py-2 rounded transition">Customers</Link>
-              <Link to="/orders" className="hover:bg-blue-700 px-3 py-2 rounded transition">Orders</Link>
-              {user.role === 'ADMIN' && (
-                <Link to="/dashboard" className="hover:bg-blue-700 px-3 py-2 rounded transition">Reports</Link>
+            <div className="flex items-center space-x-2">
+              <Link to="/" className="hover:bg-slate-800 px-4 py-2 rounded-lg font-medium transition">POS</Link>
+              <Link to="/inventory" className="hover:bg-slate-800 px-4 py-2 rounded-lg font-medium transition">Inventory</Link>
+              <Link to="/orders" className="hover:bg-slate-800 px-4 py-2 rounded-lg font-medium transition">Sales</Link>
+              {user.role === 'admin' && (
+                <Link to="/dashboard" className="hover:bg-slate-800 px-4 py-2 rounded-lg font-medium transition text-blue-400">Reports</Link>
               )}
-              <button onClick={handleLogout} className="bg-red-500 hover:bg-red-600 px-3 py-2 rounded transition">
+              <button onClick={handleLogout} className="bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white px-4 py-2 rounded-lg font-bold transition">
                 Logout
               </button>
             </div>

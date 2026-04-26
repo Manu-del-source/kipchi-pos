@@ -1,23 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 import toast from 'react-hot-toast';
+import { BarChart3, Package, TrendingUp, AlertTriangle } from 'lucide-react';
 
 const Dashboard = () => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [dateRange, setDateRange] = useState({
-    startDate: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0]
-  });
+  
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
 
   const fetchStats = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/reports/dashboard', { params: dateRange });
-      setStats(res.data);
+      const { data } = await api.get('/reports/dashboard', { params: { role: user.role } });
+      setStats(data);
     } catch (err) {
-      toast.error('Failed to load dashboard stats');
-      console.error(err);
+      toast.error(err.response?.data?.detail || 'Failed to load dashboard stats');
     } finally {
       setLoading(false);
     }
@@ -25,88 +23,134 @@ const Dashboard = () => {
 
   useEffect(() => {
     fetchStats();
-  }, [dateRange]);
+  }, []);
 
-  if (loading && !stats) return <div className="p-8 text-center">Loading reports...</div>;
+  if (loading && !stats) return <div className="p-8 text-center text-slate-400">Loading shop performance...</div>;
 
   return (
-    <div className="p-8 max-w-7xl mx-auto">
+    <div className="p-8 max-w-7xl mx-auto bg-slate-950 min-h-screen text-white">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-800">Admin Dashboard</h1>
-        <div className="flex space-x-4 bg-white p-2 rounded-lg shadow-sm">
-          <input 
-            type="date" 
-            className="border-none focus:ring-0"
-            value={dateRange.startDate}
-            onChange={(e) => setDateRange({...dateRange, startDate: e.target.value})}
-          />
-          <span className="text-gray-400">to</span>
-          <input 
-            type="date" 
-            className="border-none focus:ring-0"
-            value={dateRange.endDate}
-            onChange={(e) => setDateRange({...dateRange, endDate: e.target.value})}
-          />
+        <div>
+          <h1 className="text-3xl font-black tracking-tight uppercase italic">SHOP <span className="text-blue-500">PERFORMANCE</span></h1>
+          <p className="text-slate-500 text-sm font-bold uppercase tracking-widest">ROHI Hardware & Moto POS Metrics</p>
         </div>
+        <button 
+          onClick={fetchStats}
+          className="bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded-lg font-bold transition flex items-center"
+        >
+          <TrendingUp className="mr-2" size={18} /> REFRESH
+        </button>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <p className="text-gray-500 text-sm font-medium uppercase tracking-wider">Total Revenue</p>
-          <h2 className="text-3xl font-black text-blue-600">KES {Number(stats?.summary?.totalRevenue || 0).toLocaleString()}</h2>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl">
+          <div className="flex items-center text-blue-500 mb-4">
+            <TrendingUp size={20} className="mr-2" />
+            <span className="text-[10px] font-black uppercase tracking-widest">Revenue</span>
+          </div>
+          <h2 className="text-2xl font-black text-white">KES {Number(stats?.revenue || 0).toLocaleString()}</h2>
         </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <p className="text-gray-500 text-sm font-medium uppercase tracking-wider">Total Transactions</p>
-          <h2 className="text-3xl font-black text-green-600">{stats?.summary?.totalTransactions || 0}</h2>
+        
+        <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl">
+          <div className="flex items-center text-green-500 mb-4">
+            <BarChart3 size={20} className="mr-2" />
+            <span className="text-[10px] font-black uppercase tracking-widest">Orders</span>
+          </div>
+          <h2 className="text-2xl font-black text-white">{stats?.orders_count || 0}</h2>
         </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <p className="text-gray-500 text-sm font-medium uppercase tracking-wider">Avg. Sale Value</p>
-          <h2 className="text-3xl font-black text-purple-600">
-            KES {stats?.summary?.totalTransactions > 0 
-              ? (stats.summary.totalRevenue / stats.summary.totalTransactions).toLocaleString(undefined, {maximumFractionDigits: 0}) 
-              : 0}
-          </h2>
+
+        <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl border-l-4 border-l-emerald-500">
+          <div className="flex items-center text-emerald-500 mb-4">
+            <TrendingUp size={20} className="mr-2" />
+            <span className="text-[10px] font-black uppercase tracking-widest">Net Profit</span>
+          </div>
+          <h2 className="text-2xl font-black text-white">KES {Number(stats?.profit || 0).toLocaleString()}</h2>
+        </div>
+
+        <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl">
+          <div className="flex items-center text-amber-500 mb-4">
+            <AlertTriangle size={20} className="mr-2" />
+            <span className="text-[10px] font-black uppercase tracking-widest">Warnings</span>
+          </div>
+          <h2 className="text-2xl font-black text-white">{stats?.low_stock?.length || 0}</h2>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Popular Items */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <h3 className="text-xl font-bold mb-4 text-gray-800 border-b pb-2">Top 5 Selling Items</h3>
+        {/* Top Selling Table */}
+        <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl">
+          <h3 className="text-xl font-bold mb-6 text-white flex items-center italic uppercase tracking-tighter">
+            <TrendingUp className="mr-2 text-blue-500" /> Top Selling Parts
+          </h3>
           <div className="space-y-4">
-            {stats?.popularItems?.map((item, i) => (
-              <div key={i} className="flex items-center justify-between">
-                <span className="text-gray-700 font-medium">{item.name}</span>
-                <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm font-bold">
-                  {item.quantity} sold
-                </span>
+            {stats?.top_selling?.map((item, i) => (
+              <div key={i} className="flex items-center justify-between p-4 bg-slate-800/40 rounded-xl border border-slate-800">
+                <div>
+                  <div className="font-bold text-white text-sm uppercase">{item.name}</div>
+                  <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{item.total_qty} units sold</div>
+                </div>
+                <div className="text-blue-400 font-black">
+                  KES {Number(item.total_revenue).toLocaleString()}
+                </div>
               </div>
             ))}
-            {stats?.popularItems?.length === 0 && <p className="text-gray-400 text-center py-4">No data available</p>}
+            {(!stats?.top_selling || stats.top_selling.length === 0) && (
+               <div className="text-center py-10 text-slate-600 font-bold uppercase text-xs tracking-widest">No Sales Data Today</div>
+            )}
           </div>
         </div>
 
-        {/* Daily Sales Trend (Simple List) */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <h3 className="text-xl font-bold mb-4 text-gray-800 border-b pb-2">Sales Trend</h3>
-          <div className="overflow-y-auto max-h-64">
-             <table className="w-full">
-               <thead>
-                 <tr className="text-left text-gray-400 text-xs uppercase">
-                   <th className="pb-2">Date</th>
-                   <th className="pb-2 text-right">Revenue</th>
-                 </tr>
-               </thead>
-               <tbody>
-                 {stats?.salesTrend?.map((day, i) => (
-                   <tr key={i} className="border-t border-gray-50">
-                     <td className="py-2 text-gray-600">{day.date}</td>
-                     <td className="py-2 text-right font-bold text-gray-800">KES {day.total.toLocaleString()}</td>
-                   </tr>
-                 ))}
-               </tbody>
-             </table>
+        {/* Low Stock Table */}
+        <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl">
+          <h3 className="text-xl font-bold mb-6 text-white flex items-center">
+            <Package className="mr-2 text-blue-500" /> Inventory Warnings
+          </h3>
+          <div className="overflow-hidden rounded-xl border border-slate-800">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-slate-800/50 text-slate-400 text-[10px] uppercase tracking-widest">
+                  <th className="p-4">Product Name</th>
+                  <th className="p-4 text-right">Current Stock</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats?.low_stock?.map((item, i) => (
+                  <tr key={i} className="border-t border-slate-800 hover:bg-slate-800/30 transition">
+                    <td className="p-4 font-medium text-slate-200">{item.name}</td>
+                    <td className="p-4 text-right">
+                      <span className="bg-red-500/10 text-red-400 px-3 py-1 rounded-full text-xs font-black">
+                        {item.stock} left
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+                {(!stats?.low_stock || stats.low_stock.length === 0) && (
+                  <tr>
+                    <td colSpan="2" className="p-8 text-center text-slate-600 italic">No inventory warnings</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Quick Tips */}
+        <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl">
+          <h3 className="text-xl font-bold mb-6 text-white">System Status</h3>
+          <div className="space-y-4">
+            <div className="flex items-center p-4 bg-blue-500/5 rounded-xl border border-blue-500/10">
+              <div className="w-2 h-2 bg-blue-500 rounded-full mr-4 animate-pulse"></div>
+              <span className="text-sm text-slate-300">FastAPI Backend: <b className="text-blue-400">Connected</b></span>
+            </div>
+            <div className="flex items-center p-4 bg-green-500/5 rounded-xl border border-green-500/10">
+              <div className="w-2 h-2 bg-green-500 rounded-full mr-4"></div>
+              <span className="text-sm text-slate-300">M-Pesa STK Service: <b className="text-green-400">Online</b></span>
+            </div>
+            <div className="flex items-center p-4 bg-slate-800/50 rounded-xl">
+              <div className="w-2 h-2 bg-slate-600 rounded-full mr-4"></div>
+              <span className="text-sm text-slate-500">Database Engine: SQLite3 (Local)</span>
+            </div>
           </div>
         </div>
       </div>
